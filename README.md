@@ -19,7 +19,6 @@ services:
     volumes:
       - ${DATA_DIR}/rclone/config:/config
       - ${DATA_DIR}/rclone/cron/daily:/etc/cron.daily
-      - ${DATA_DIR}/plexdrive/data:/data
       - ${DATA_DIR}/plexdrive/local-encrypted:/local
       - ${DATA_DIR}/plexdrive/encfs.xml:/encfs.xml
       - ${DATA_DIR}/plexdrive/encfspass:/encfspass
