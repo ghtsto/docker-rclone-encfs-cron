@@ -1,0 +1,12 @@
+#!/usr/bin/with-contenv bash
+
+printf "\n\n\n==============================================================\n"
+echo "Setup rclone"
+printf "==============================================================\n"
+
+if [ -f "/config/rclone/rclone.conf" ]; then
+  echo "rclone has already been set up."
+  echo "Try again after removing 'rclone.conf' in /config/rclone/."
+else
+  rclone config
+fi
