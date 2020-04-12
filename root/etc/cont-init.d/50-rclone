@@ -1,0 +1,12 @@
+#!/usr/bin/with-contenv bash
+
+echo "*** checking rclone config"
+while [ ! -f "/config/rclone/rclone.conf" ]; do
+	echo "Waiting for config file in /config/rclone. Retrying in 30s ..."
+	echo "RUN: docker exec -it <CONTAINER_NAME> rclone_setup"
+	sleep 30
+done
+
+chown -R abc:abc /config
+
+echo "*** $(rclone --version | grep rclone) ready!"

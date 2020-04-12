@@ -61,9 +61,10 @@ RUN \
  # monthly at 00:00 on 1st of month
  (crontab -l 2>/dev/null; echo "0 0 1 * * cd / && run-parts --report /etc/cron.monthly > /proc/1/fd/1") | crontab -
 
+COPY root/ /
+
 ENV XDG_CONFIG_HOME=/config
 
-COPY ./services.d /etc/services.d
-COPY ./bin /usr/bin
+VOLUME /config
 
 ENTRYPOINT ["/init"]

@@ -1,0 +1,7 @@
+#!/usr/bin/with-contenv bash
+
+mkdir -p /config
+
+chown -R abc:abc /config
+
+chmod a+x /usr/bin/rclone_setup
