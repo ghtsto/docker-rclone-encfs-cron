@@ -1,0 +1,88 @@
+#!/bin/bash
+
+# Look for deleted file/directory references then rclone delete & purge them
+
+# get date
+NOW=$(date +"%m_%d_%Y")
+
+# Paths
+DATA_PATH="/data"
+RCLONE_DEST="gdrive:/"
+
+# logs
+DELETE_LOGFILE="/var/log/rclone_delete_$NOW.log"
+
+# Define PID file
+PIDFILE="/tmp/rclone-cleanup.pid"
+
+# Export ENCFS6_CONFIG
+export ENCFS6_CONFIG="/encfs.xml"
+
+# Export rclone config path
+export XDG_CONFIG_HOME="/config"
+
+# Check if PID file exists, if it does, check it's valid, and if not create new
+if [ -f $PIDFILE ]
+then
+  PID=$(cat $PIDFILE)
+  ps -p $PID > /dev/null 2>&1
+  if [ $? -eq 0 ]
+  then
+    echo "rclone cleanup already running."
+    exit 1
+  else
+    ## If process not found assume not running
+    echo $$ > $PIDFILE
+    if [ $? -ne 0 ]
+    then
+      echo "unable to create PID file"
+      exit 1
+    fi
+  fi
+else
+  echo $$ > $PIDFILE
+  if [ $? -ne 0 ]
+  then
+    echo "unable to create PID file"
+    exit 1
+  fi
+fi
+
+echo "Start rclone cleanup"
+
+# tail delete log
+tail -F $DELETE_LOGFILE &
+TAILPID=$!
+
+find "$DATA_PATH/.unionfs-fuse" -name '*_HIDDEN~' -type f | while read LINE; do
+  OLDPATH=${LINE#${DATA_PATH}/.unionfs-fuse}
+  OLDPATH2=${OLDPATH:1}
+  ENCPATH="$(encfsctl encode . --extpass="/bin/cat /encfspass" "${OLDPATH2%_HIDDEN~}")"
+  NEWPATH=$RCLONE_DEST${ENCPATH}
+  echo "(deleting file)"
+  echo "LOCAL - ${OLDPATH2%_HIDDEN~}"
+  echo "REMOTE - $NEWPATH"
+  /usr/bin/rclone delete "$NEWPATH" -vv --drive-use-trash --log-file="$DELETE_LOGFILE" && rm "$LINE"
+done
+
+find "$DATA_PATH/.unionfs-fuse" -name '*_HIDDEN~' -type d | while read LINE; do
+  OLDPATH=${LINE#${DATA_PATH}/.unionfs-fuse}
+  OLDPATH2=${OLDPATH:1}
+  ENCPATH="$(encfsctl encode . --extpass="/bin/cat /encfspass" "${OLDPATH2%_HIDDEN~}")"
+  NEWPATH=$RCLONE_DEST${ENCPATH}
+  echo "(purging directory)"
+  echo "LOCAL - ${OLDPATH2%_HIDDEN~}"
+  echo "REMOTE - $NEWPATH"
+  /usr/bin/rclone purge "$NEWPATH" -vv --drive-use-trash --log-file="$DELETE_LOGFILE" && rm -r "$LINE"
+done
+
+# kill tail
+kill $TAILPID
+
+# Clean up empty dirs
+find "$DATA_PATH/.unionfs-fuse" -mindepth 1 -type d -empty -delete
+
+echo "Finish rclone cleanup"
+
+# remove the PID file
+rm "$PIDFILE"

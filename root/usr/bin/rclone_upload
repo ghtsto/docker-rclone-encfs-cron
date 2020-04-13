@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# Upload all content from local encrypted directory of the UnionFS mount that are older than X days
+
+# get date
+NOW=$(date +"%m_%d_%Y")
+MOVE_DAYS="4d"   #use xd for days, xm for minutes, or x for seconds
+COPY_DAYS="2d"   #use xd for days, xm for minutes, or x for seconds
+
+# Paths
+DATA_PATH="/data"
+LOCAL_PATH="/local"
+RCLONE_DEST="gdrive:/"
+
+# rclone params
+TRANSFERS="10"
+CHECKERS="10"
+BUFFERSIZE="64M"
+
+# logs
+COPY_LOGFILE="/var/log/rclone_copy_$NOW.log"
+MOVE_LOGFILE="/var/log/rclone_move_$NOW.log"
+
+# Define PID file
+PIDFILE="/tmp/rclone-upload.pid"
+
+# Export rclone config path
+export XDG_CONFIG_HOME="/config"
+
+# Check if PID file exists, if it does, check it's valid, and if not create new
+if [ -f $PIDFILE ]
+then
+  PID=$(cat $PIDFILE)
+  ps -p $PID > /dev/null 2>&1
+  if [ $? -eq 0 ]
+  then
+    echo "rclone upload already running."
+    exit 1
+  else
+    ## If process not found assume not running
+    echo $$ > $PIDFILE
+    if [ $? -ne 0 ]
+    then
+      echo "unable to create PID file"
+      exit 1
+    fi
+  fi
+else
+  echo $$ > $PIDFILE
+  if [ $? -ne 0 ]
+  then
+    echo "unable to create PID file"
+    exit 1
+  fi
+fi
+
+# Run the copy job
+echo "Start rclone copy job"
+
+# tail copy log
+tail -F $COPY_LOGFILE &
+TAIL_COPY_PID=$!
+
+/usr/bin/rclone copy "$LOCAL_PATH" "$RCLONE_DEST" -v --exclude="/GYv0V045zQsze5ILcBbJJQz4/**" --transfers=$TRANSFERS --checkers=$CHECKERS --min-age=$COPY_DAYS --log-file="$COPY_LOGFILE" --buffer-size=$BUFFERSIZE
+echo "Finished rclone copy job"
+
+# kill tail
+kill $TAIL_COPY_PID
+
+echo "Sleeping for 6 minutes to let plexdrive update"
+#sleep 6m
+
+# Run the move job
+echo "Start rclone move job"
+
+# tail move log
+tail -F $MOVE_LOGFILE &
+TAIL_MOVE_PID=$!
+
+/usr/bin/rclone move "$LOCAL_PATH" "$RCLONE_DEST" -v --exclude="/GYv0V045zQsze5ILcBbJJQz4/**" --checksum --delete-after --transfers=$TRANSFERS --checkers=$CHECKERS --min-age=$MOVE_DAYS --log-file="$MOVE_LOGFILE" --buffer-size=$BUFFERSIZE
+echo "Finish rclone move job"
+
+# kill tail
+kill $TAIL_MOVE_PID
+
+# Clean up empty local directories
+find "$LOCAL_PATH" -mindepth 1 -not -path "*/GYv0V045zQsze5ILcBbJJQz4" -type d -empty -delete
+
+# remove the PID file
+rm "$PIDFILE"

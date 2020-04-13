@@ -5,3 +5,5 @@ mkdir -p /config
 chown -R abc:abc /config
 
 chmod a+x /usr/bin/rclone_setup
+chmod a+x /usr/bin/rclone_cleanup
+chmod a+x /usr/bin/rclone_upload
