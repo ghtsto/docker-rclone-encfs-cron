@@ -1,8 +1,6 @@
 #!/usr/bin/with-contenv bash
 
-mkdir -p /config
-
-chown -R abc:abc /config
+chown -R abc:abc /config /logs
 
 chmod a+x /usr/bin/rclone_setup
 chmod a+x /usr/bin/rclone_cleanup
