@@ -1,15 +1,25 @@
 #!/bin/bash
 
-# Upload all content from local encrypted directory of the UnionFS mount that are older than X days
+# Upload all content from local encrypted directory of the UnionFS mount that are older than X time
 
 # get date
 NOW=$(date +"%m_%d_%Y")
-MOVE_DAYS="4d"   #use xd for days, xm for minutes, or x for seconds
-COPY_DAYS="2d"   #use xd for days, xm for minutes, or x for seconds
+
+# run rclone tasks when files are at least 8 hours old
+MOVE_DAYS="8h"
+COPY_DAYS="8h"
+SLEEP_TIME="6m"
+
+# if 'now' arg is present, run the rclone tasks immediately
+if [ "$1" = now ]; then
+  MOVE_DAYS="1"
+  COPY_DAYS="1"
+  SLEEP_TIME="1s"
+fi
 
 # Paths
-DATA_PATH="/data"
-LOCAL_PATH="/local"
+DATA_PATH="/unionfs"
+LOCAL_PATH="/local-encrypted"
 RCLONE_DEST="gdrive:/"
 
 # rclone params
@@ -18,14 +28,20 @@ CHECKERS="10"
 BUFFERSIZE="64M"
 
 # logs
-COPY_LOGFILE="/var/log/rclone_copy_$NOW.log"
-MOVE_LOGFILE="/var/log/rclone_move_$NOW.log"
+COPY_LOGFILE="/logs/rclone_copy_$NOW.log"
+MOVE_LOGFILE="/logs/rclone_move_$NOW.log"
 
 # Define PID file
 PIDFILE="/tmp/rclone-upload.pid"
 
 # Export rclone config path
 export XDG_CONFIG_HOME="/config"
+
+# Export ENCFS6_CONFIG
+export ENCFS6_CONFIG="/encfs/encfs.xml"
+
+# Set encrypted name of .unionfs-fuse directory
+UFS_HIDDEN="$(encfsctl encode . --extpass="/bin/cat /encfs/encfspass" ".unionfs-fuse")"
 
 # Check if PID file exists, if it does, check it's valid, and if not create new
 if [ -f $PIDFILE ]
@@ -57,34 +73,26 @@ fi
 # Run the copy job
 echo "Start rclone copy job"
 
-# tail copy log
-tail -F $COPY_LOGFILE &
-TAIL_COPY_PID=$!
+RCLONE_COPY=(/usr/bin/rclone copy "$LOCAL_PATH" "$RCLONE_DEST" -v --exclude="/$UFS_HIDDEN/**" --transfers=$TRANSFERS --checkers=$CHECKERS --min-age=$COPY_DAYS --log-file="$COPY_LOGFILE" --buffer-size=$BUFFERSIZE)
+s6-setuidgid abc ${RCLONE_COPY[@]}
 
-/usr/bin/rclone copy "$LOCAL_PATH" "$RCLONE_DEST" -v --exclude="/GYv0V045zQsze5ILcBbJJQz4/**" --transfers=$TRANSFERS --checkers=$CHECKERS --min-age=$COPY_DAYS --log-file="$COPY_LOGFILE" --buffer-size=$BUFFERSIZE
+echo "rclone copy logs accessible in /logs volume"
 echo "Finished rclone copy job"
 
-# kill tail
-kill $TAIL_COPY_PID
-
-echo "Sleeping for 6 minutes to let plexdrive update"
-#sleep 6m
+echo "Sleeping for $SLEEP_TIME to let plexdrive update"
+sleep $SLEEP_TIME
 
 # Run the move job
 echo "Start rclone move job"
 
-# tail move log
-tail -F $MOVE_LOGFILE &
-TAIL_MOVE_PID=$!
+RCLONE_MOVE=(/usr/bin/rclone move "$LOCAL_PATH" "$RCLONE_DEST" -v --exclude="/$UFS_HIDDEN/**" --checksum --delete-after --transfers=$TRANSFERS --checkers=$CHECKERS --min-age=$MOVE_DAYS --log-file="$MOVE_LOGFILE" --buffer-size=$BUFFERSIZE)
+s6-setuidgid abc ${RCLONE_MOVE[@]}
 
-/usr/bin/rclone move "$LOCAL_PATH" "$RCLONE_DEST" -v --exclude="/GYv0V045zQsze5ILcBbJJQz4/**" --checksum --delete-after --transfers=$TRANSFERS --checkers=$CHECKERS --min-age=$MOVE_DAYS --log-file="$MOVE_LOGFILE" --buffer-size=$BUFFERSIZE
+echo "rclone move logs accessible in /logs volume"
 echo "Finish rclone move job"
 
-# kill tail
-kill $TAIL_MOVE_PID
-
 # Clean up empty local directories
-find "$LOCAL_PATH" -mindepth 1 -not -path "*/GYv0V045zQsze5ILcBbJJQz4" -type d -empty -delete
+s6-setuidgid abc find "$LOCAL_PATH" -mindepth 1 -not -path "*/$UFS_HIDDEN" -type d -empty -delete
 
 # remove the PID file
 rm "$PIDFILE"

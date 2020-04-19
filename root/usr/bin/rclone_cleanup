@@ -6,17 +6,17 @@
 NOW=$(date +"%m_%d_%Y")
 
 # Paths
-DATA_PATH="/data"
+DATA_PATH="/unionfs"
 RCLONE_DEST="gdrive:/"
 
 # logs
-DELETE_LOGFILE="/var/log/rclone_delete_$NOW.log"
+DELETE_LOGFILE="/logs/rclone_delete_$NOW.log"
 
 # Define PID file
 PIDFILE="/tmp/rclone-cleanup.pid"
 
 # Export ENCFS6_CONFIG
-export ENCFS6_CONFIG="/encfs.xml"
+export ENCFS6_CONFIG="/encfs/encfs.xml"
 
 # Export rclone config path
 export XDG_CONFIG_HOME="/config"
@@ -50,38 +50,34 @@ fi
 
 echo "Start rclone cleanup"
 
-# tail delete log
-tail -F $DELETE_LOGFILE &
-TAILPID=$!
-
 find "$DATA_PATH/.unionfs-fuse" -name '*_HIDDEN~' -type f | while read LINE; do
   OLDPATH=${LINE#${DATA_PATH}/.unionfs-fuse}
   OLDPATH2=${OLDPATH:1}
-  ENCPATH="$(encfsctl encode . --extpass="/bin/cat /encfspass" "${OLDPATH2%_HIDDEN~}")"
+  ENCPATH="$(encfsctl encode . --extpass="/bin/cat /encfs/encfspass" "${OLDPATH2%_HIDDEN~}")"
   NEWPATH=$RCLONE_DEST${ENCPATH}
   echo "(deleting file)"
   echo "LOCAL - ${OLDPATH2%_HIDDEN~}"
   echo "REMOTE - $NEWPATH"
-  /usr/bin/rclone delete "$NEWPATH" -vv --drive-use-trash --log-file="$DELETE_LOGFILE" && rm "$LINE"
+  RCLONE_DELETE=(/usr/bin/rclone delete "$NEWPATH" -vv --drive-use-trash --log-file="$DELETE_LOGFILE")
+  s6-setuidgid abc ${RCLONE_DELETE[@]} && rm "$LINE"
 done
 
 find "$DATA_PATH/.unionfs-fuse" -name '*_HIDDEN~' -type d | while read LINE; do
   OLDPATH=${LINE#${DATA_PATH}/.unionfs-fuse}
   OLDPATH2=${OLDPATH:1}
-  ENCPATH="$(encfsctl encode . --extpass="/bin/cat /encfspass" "${OLDPATH2%_HIDDEN~}")"
+  ENCPATH="$(encfsctl encode . --extpass="/bin/cat /encfs/encfspass" "${OLDPATH2%_HIDDEN~}")"
   NEWPATH=$RCLONE_DEST${ENCPATH}
   echo "(purging directory)"
   echo "LOCAL - ${OLDPATH2%_HIDDEN~}"
   echo "REMOTE - $NEWPATH"
-  /usr/bin/rclone purge "$NEWPATH" -vv --drive-use-trash --log-file="$DELETE_LOGFILE" && rm -r "$LINE"
+  RCLONE_PURGE=(/usr/bin/rclone purge "$NEWPATH" -vv --drive-use-trash --log-file="$DELETE_LOGFILE")
+  s6-setuidgid abc ${RCLONE_PURGE[@]} && rm -r "$LINE"
 done
 
-# kill tail
-kill $TAILPID
-
 # Clean up empty dirs
-find "$DATA_PATH/.unionfs-fuse" -mindepth 1 -type d -empty -delete
+s6-setuidgid abc find "$DATA_PATH/.unionfs-fuse" -mindepth 1 -type d -empty -delete
 
+echo "rclone delete logs accessible in /logs volume"
 echo "Finish rclone cleanup"
 
 # remove the PID file

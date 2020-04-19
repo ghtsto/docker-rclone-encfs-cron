@@ -7,6 +7,4 @@ while [ ! -f "/config/rclone/rclone.conf" ]; do
 	sleep 30
 done
 
-chown -R abc:abc /config
-
 echo "*** $(rclone --version | grep rclone) ready!"

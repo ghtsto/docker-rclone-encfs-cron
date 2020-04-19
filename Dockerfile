@@ -49,22 +49,19 @@ RUN \
  cd $(mktemp -d) && \
  rm -rf /tmp/* /var/lib/{apt,dpkg,cache,log}/ && \
  echo "**** crontab setup ****" && \
- mkdir -p /etc/cron.minute && \
  # every minute
- (crontab -l 2>/dev/null; echo "* * * * * cd / && run-parts --report /etc/cron.minute > /proc/1/fd/1") | crontab - && \
+ (crontab -l 2>/dev/null; echo "* * * * * cd / && run-parts --report /config/cron/minute > /proc/1/fd/1") | crontab - && \
  # hourly on the hour
- (crontab -l 2>/dev/null; echo "0 * * * * cd / && run-parts --report /etc/cron.hourly > /proc/1/fd/1") | crontab - && \
+ (crontab -l 2>/dev/null; echo "0 * * * * cd / && run-parts --report /config/cron/hourly > /proc/1/fd/1") | crontab - && \
  # daily at 02:00
- (crontab -l 2>/dev/null; echo "0 2 * * * cd / && run-parts --report /etc/cron.daily > /proc/1/fd/1") | crontab - && \
+ (crontab -l 2>/dev/null; echo "0 2 * * * cd / && run-parts --report /config/cron/daily > /proc/1/fd/1") | crontab - && \
  # weekly at 05:00 on Monday
- (crontab -l 2>/dev/null; echo "0 5 * * 1 cd / && run-parts --report /etc/cron.weekly > /proc/1/fd/1") | crontab - && \
+ (crontab -l 2>/dev/null; echo "0 5 * * 1 cd / && run-parts --report /config/cron/weekly > /proc/1/fd/1") | crontab - && \
  # monthly at 00:00 on 1st of month
- (crontab -l 2>/dev/null; echo "0 0 1 * * cd / && run-parts --report /etc/cron.monthly > /proc/1/fd/1") | crontab -
+ (crontab -l 2>/dev/null; echo "0 0 1 * * cd / && run-parts --report /config/cron/monthly > /proc/1/fd/1") | crontab -
 
 COPY root/ /
 
 ENV XDG_CONFIG_HOME=/config
-
-VOLUME /config
 
 ENTRYPOINT ["/init"]
