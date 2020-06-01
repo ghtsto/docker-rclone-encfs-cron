@@ -6,8 +6,8 @@
 NOW=$(date +"%m_%d_%Y")
 
 # run rclone tasks when files are at least 8 hours old
-MOVE_DAYS="8h"
-COPY_DAYS="8h"
+MOVE_DAYS="$FILE_AGE"
+COPY_DAYS="$FILE_AGE"
 SLEEP_TIME="6m"
 
 # if 'now' arg is present, run the rclone tasks immediately
